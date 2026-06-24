@@ -83,105 +83,157 @@ const WIDGET_HTML = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Jewellery Recommendations</title>
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: #0a0a0f;
+    font-family: 'Outfit', sans-serif;
+    background: linear-gradient(180deg, #07070a 0%, #0f0f18 100%);
     color: #fff;
     min-height: 100vh;
     padding: 16px;
+    overflow-y: hidden;
   }
   h2 {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
-    color: #a78bfa;
-    letter-spacing: 0.08em;
+    color: #dfb750; /* Luxury Gold */
+    letter-spacing: 0.12em;
     text-transform: uppercase;
-    margin-bottom: 16px;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
   .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 14px;
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    gap: 16px;
+    padding: 4px 4px 16px 4px;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Custom scrollbar for premium touch */
+  .grid::-webkit-scrollbar {
+    height: 3px;
+  }
+  .grid::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.03);
+  }
+  .grid::-webkit-scrollbar-thumb {
+    background: rgba(223, 183, 80, 0.4);
+    border-radius: 99px;
+  }
+  .grid::-webkit-scrollbar-thumb:hover {
+    background: rgba(223, 183, 80, 0.8);
   }
   .card {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 16px;
+    flex: 0 0 210px;
+    scroll-snap-align: start;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(223, 183, 80, 0.15);
+    border-radius: 20px;
     overflow: hidden;
-    transition: transform 0.2s, border-color 0.2s;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     cursor: pointer;
+    display: flex;
+    flex-direction: column;
   }
   .card:hover {
-    transform: translateY(-4px);
-    border-color: rgba(167,139,250,0.5);
+    transform: translateY(-6px);
+    border-color: rgba(223, 183, 80, 0.7);
+    box-shadow: 0 12px 30px rgba(223, 183, 80, 0.15);
   }
   .card img {
     width: 100%;
-    aspect-ratio: 1;
+    aspect-ratio: 1.1;
     object-fit: cover;
-    background: #1a1a2e;
+    background: #11111a;
     display: block;
+    border-bottom: 1px solid rgba(223, 183, 80, 0.1);
   }
   .card-body {
-    padding: 12px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    justify-content: space-between;
   }
   .card-name {
-    font-size: 13px;
+    font-size: 13.5px;
     font-weight: 600;
-    color: #f0e6ff;
-    margin-bottom: 4px;
-    line-height: 1.3;
+    color: #f7f5ff;
+    margin-bottom: 6px;
+    line-height: 1.35;
+    min-height: 36px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
   .card-price {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 700;
-    color: #fbbf24;
-    margin-bottom: 6px;
+    color: #dfb750;
+    margin-bottom: 8px;
   }
   .card-tags {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
   }
   .tag {
-    font-size: 10px;
-    padding: 2px 7px;
+    font-size: 9.5px;
+    font-weight: 500;
+    padding: 2.5px 7px;
     border-radius: 999px;
-    background: rgba(139,92,246,0.2);
-    border: 1px solid rgba(139,92,246,0.3);
-    color: #c4b5fd;
+    background: rgba(223, 183, 80, 0.08);
+    border: 1px solid rgba(223, 183, 80, 0.2);
+    color: #f3e5ab;
   }
   .card-score {
     font-size: 10px;
-    color: #6b7280;
-    margin-bottom: 10px;
+    color: #8c8da0;
+    margin-bottom: 12px;
   }
   .btn-select {
     width: 100%;
-    padding: 8px;
-    border-radius: 10px;
-    border: none;
-    background: linear-gradient(135deg, #7c3aed, #db2777);
-    color: #fff;
-    font-size: 12px;
+    padding: 9px;
+    border-radius: 12px;
+    border: 1px solid rgba(223, 183, 80, 0.3);
+    background: linear-gradient(135deg, rgba(223, 183, 80, 0.1) 0%, rgba(223, 183, 80, 0.02) 100%);
+    color: #dfb750;
+    font-family: 'Outfit', sans-serif;
+    font-size: 11.5px;
     font-weight: 600;
     cursor: pointer;
-    transition: opacity 0.2s;
+    transition: all 0.25s ease;
   }
-  .btn-select:hover { opacity: 0.85; }
+  .btn-select:hover {
+    background: rgba(223, 183, 80, 0.95);
+    color: #0c0c14;
+    border-color: transparent;
+    box-shadow: 0 4px 12px rgba(223, 183, 80, 0.3);
+  }
   .btn-select.selected {
-    background: linear-gradient(135deg, #059669, #0891b2);
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
   }
   .error {
-    color: #f87171;
+    color: #ef4444;
     font-size: 13px;
     text-align: center;
-    padding: 32px;
+    padding: 24px;
+    border: 1px dashed rgba(239, 68, 68, 0.3);
+    border-radius: 16px;
+    background: rgba(239, 68, 68, 0.05);
   }
   .loading {
-    color: #6b7280;
+    color: #8c8da0;
     font-size: 13px;
     text-align: center;
     padding: 32px;
@@ -387,6 +439,12 @@ function buildServer(origin: string): McpServer {
         outfitType: z.string().optional().describe("e.g. 'saree', 'lehenga', 'gown', 'western_dress'"),
         style: z.string().optional().describe("e.g. 'bridal', 'royal', 'modern', 'elegant', 'luxury'"),
       },
+      _meta: {
+        ui: {
+          resourceUri: "ui://jewellery-stylist/cards.html",
+        },
+        "openai/outputTemplate": "ui://jewellery-stylist/cards.html",
+      },
     },
     async (args) => {
       console.log("[TOOL] recommend_jewellery args:", JSON.stringify(args));
@@ -416,6 +474,24 @@ function buildServer(origin: string): McpServer {
         )
         .join("\n\n");
 
+      const structuredContent = {
+        products: results.map((p) => ({
+          id: p.id,
+          name: p.name,
+          price: p.price,
+          image: p.image,
+          styleTags: p.aiTags.styleTags,
+          occasionTags: p.aiTags.occasionTags,
+          bestOutfitColours: p.aiTags.bestOutfitColours,
+          bestOutfitTypes: p.aiTags.bestOutfitTypes,
+          lookIntensity: p.aiTags.lookIntensity,
+          score: p.score,
+        })),
+        occasion: args.occasion,
+        outfitColor: args.outfitColor,
+        outfitType: args.outfitType,
+      };
+
       return {
         content: [
           {
@@ -425,6 +501,13 @@ function buildServer(origin: string): McpServer {
               `Which one do you like? Reply 1, 2, or 3 and I'll offer a virtual try-on.`,
           },
         ],
+        structuredContent,
+        _meta: {
+          ui: {
+            resourceUri: "ui://jewellery-stylist/cards.html",
+          },
+          "openai/outputTemplate": "ui://jewellery-stylist/cards.html",
+        },
       } as any;
     }
   );
