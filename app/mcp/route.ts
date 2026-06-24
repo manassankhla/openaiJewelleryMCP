@@ -314,8 +314,18 @@ const WIDGET_HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
+function getLocalImageUrl(cloudinaryUrl: string, origin: string): string {
+  if (cloudinaryUrl.includes("three_gcdcw2")) return `${origin}/three.png`;
+  if (cloudinaryUrl.includes("one_p3xu4m")) return `${origin}/one.png`;
+  if (cloudinaryUrl.includes("two_r4d4lf")) return `${origin}/two.png`;
+  if (cloudinaryUrl.includes("six_hwcfz0")) return `${origin}/six.png`;
+  if (cloudinaryUrl.includes("four_x47ahs")) return `${origin}/four.png`;
+  if (cloudinaryUrl.includes("five_pio50b")) return `${origin}/five.png`;
+  return cloudinaryUrl;
+}
+
 // ── MCP Server ────────────────────────────────────────────────────────────
-function buildServer(): McpServer {
+function buildServer(origin: string): McpServer {
   const server = new McpServer({
     name: "Jewellery Stylist",
     version: "1.0.0",
@@ -384,7 +394,12 @@ function buildServer(): McpServer {
     async (args) => {
       console.log("[TOOL] recommend_jewellery args:", JSON.stringify(args));
 
-      const results = recommendJewellery(args);
+      const rawResults = recommendJewellery(args);
+      const results = rawResults.map((p) => ({
+        ...p,
+        image: getLocalImageUrl(p.image, origin),
+      }));
+
       console.log(`[TOOL] ${results.length} products matched`);
 
       if (results.length === 0) {
@@ -522,10 +537,11 @@ function buildServer(): McpServer {
 
 // ── HTTP Handlers ─────────────────────────────────────────────────────────
 async function handleMcpRequest(req: Request): Promise<Response> {
+  const { origin } = new URL(req.url);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined, // stateless
   });
-  const server = buildServer();
+  const server = buildServer(origin);
   await server.connect(transport);
   const response = await transport.handleRequest(req);
   return withCors(response);
