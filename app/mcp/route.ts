@@ -380,6 +380,12 @@ function buildServer(): McpServer {
         outfitType: z.string().optional().describe("e.g. 'saree', 'lehenga', 'gown', 'western_dress'"),
         style: z.string().optional().describe("e.g. 'bridal', 'royal', 'modern', 'elegant', 'luxury'"),
       },
+      _meta: {
+        ui: {
+          resourceUri: "ui://jewellery-stylist/cards.html",
+        },
+        "openai/outputTemplate": "ui://jewellery-stylist/cards.html",
+      },
     },
     async (args) => {
       console.log("[TOOL] recommend_jewellery args:", JSON.stringify(args));
@@ -449,6 +455,7 @@ function buildServer(): McpServer {
           ui: {
             resourceUri: "ui://jewellery-stylist/cards.html",
           },
+          "openai/outputTemplate": "ui://jewellery-stylist/cards.html",
         },
       } as any;
     }
@@ -463,6 +470,12 @@ function buildServer(): McpServer {
       title: "Test Image Rendering",
       description: "Diagnostic tool. Tests whether ChatGPT renders the widget UI. Call this to verify Developer Mode is active.",
       inputSchema: {},
+      _meta: {
+        ui: {
+          resourceUri: "ui://jewellery-stylist/cards.html",
+        },
+        "openai/outputTemplate": "ui://jewellery-stylist/cards.html",
+      },
     },
     async () => {
       const testProduct = {
@@ -486,6 +499,7 @@ function buildServer(): McpServer {
         structuredContent: { products: [testProduct] },
         _meta: {
           ui: { resourceUri: "ui://jewellery-stylist/cards.html" },
+          "openai/outputTemplate": "ui://jewellery-stylist/cards.html",
         },
       } as any;
     }
