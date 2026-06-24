@@ -392,7 +392,7 @@ function buildServer(origin: string): McpServer {
     {
       // ResourceMetadata = Omit<Resource, 'uri' | 'name'> — name is excluded
       description: "Interactive jewellery recommendation cards widget with product images",
-      mimeType: "text/html+skybridge",
+      mimeType: "text/html;profile=mcp-app",
     },
     async () => {
       console.log("[RESOURCE] Serving widget: ui://widget/jewellery-cards.html");
@@ -400,7 +400,7 @@ function buildServer(origin: string): McpServer {
         contents: [
           {
             uri: "ui://widget/jewellery-cards.html",
-            mimeType: "text/html+skybridge",
+            mimeType: "text/html;profile=mcp-app",
             text: WIDGET_HTML,
           },
         ],
