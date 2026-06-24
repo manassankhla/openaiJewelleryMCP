@@ -1,46 +1,50 @@
 /**
- * MCP Route — Jewellery Stylist
+ * MCP Route — Jewellery Stylist (Apps SDK Widget Implementation)
+ * SDK: @modelcontextprotocol/sdk 1.29.0
  *
- * SDK version: @modelcontextprotocol/sdk 1.29.0
- * Protocol:    2025-11-25 (negotiated to 2025-03-26 with ChatGPT)
+ * ─── WHY IMAGES DON'T APPEAR IN STANDARD MCP CONNECTOR ───────────────────
  *
- * ─── WHY IMAGES WERE NOT RENDERING ────────────────────────────────────────
+ * The ChatGPT "Settings → Connectors → Add MCP server" flow is a PLAIN MCP
+ * connector. It:
+ *   ✅ Supports text content blocks
+ *   ❌ Does NOT render MCP ImageContent blocks as visual images
+ *   ❌ Does NOT render base64 images
+ *   ❌ Does NOT auto-render markdown image syntax from tool results
  *
- * 1. `{ type:"image", data:base64, mimeType }` blocks ARE spec-compliant and
- *    get sent correctly in the MCP JSON-RPC response.
+ * The ONLY officially supported way to render product image cards in ChatGPT
+ * is the OpenAI Apps SDK widget system, which requires:
+ *   1. ChatGPT Developer Mode  (Settings → Apps & Connectors → Advanced)
+ *   2. A ui:// resource served by the MCP server (text/html;profile=mcp-app)
+ *   3. _meta.ui.resourceUri in the tool result pointing to the ui:// resource
+ *   4. structuredContent carrying the data payload for the widget
  *
- * 2. However ChatGPT's connector does NOT render MCP image-content blocks as
- *    visual thumbnails inside the chat UI. It passes them to the model's
- *    context as vision tokens — invisible to the user.
+ * ─── IMPLEMENTATION ARCHITECTURE ──────────────────────────────────────────
  *
- * 3. Markdown `![alt](url)` inside a TEXT content block ALSO does not auto-
- *    render, because ChatGPT treats the tool result as raw context, not as
- *    something to display verbatim.
+ *   recommend_jewellery tool call
+ *         ↓
+ *   Returns:
+ *     content:           [ text block for the LLM ]
+ *     structuredContent: { products: [...] }         ← data for the widget
+ *     _meta:             { ui: { resourceUri: "ui://jewellery-stylist/cards.html" } }
+ *         ↓
+ *   ChatGPT fetches: ui://jewellery-stylist/cards.html via resources/read
+ *         ↓
+ *   MCP server returns the widget HTML (MIME: text/html;profile=mcp-app)
+ *         ↓
+ *   ChatGPT renders widget in sandboxed iframe
+ *         ↓
+ *   Widget reads window.openai.toolOutput.structuredContent.products
+ *         ↓
+ *   Renders jewellery cards with Cloudinary images, name, price, tags ✅
  *
- * ─── CORRECT APPROACH ─────────────────────────────────────────────────────
+ * ─── SCHEMA (CallToolResult — SDK types.d.ts line 2501) ───────────────────
  *
- * The only reliable way to make images appear in the chat is to have
- * ChatGPT's own reply text include an image reference. We do this by:
- *
- *   a) Embedding `![name](cloudinaryUrl)` directly inside the TEXT content
- *      that we return — ChatGPT reads this, understands it should show the
- *      image, and includes the rendered image in its response.
- *
- *   b) ALSO returning base64 `{ type:"image" }` blocks so ChatGPT's vision
- *      model has the pixel data — critical for accurate try-on compositing.
- *
- *   c) Instructing ChatGPT via the tool description that it MUST reproduce
- *      the image markdown verbatim in its reply.
- *
- * ─── SCHEMA (from SDK types.d.ts lines 2501-2603) ─────────────────────────
- *
- *   CallToolResult.content = Array<
- *     | { type:"text";  text:string }                          ← TextContent
- *     | { type:"image"; data:string; mimeType:string }         ← ImageContent (base64)
- *     | { type:"resource_link"; uri:string; name:string; ... } ← ResourceLink
- *     | { type:"resource"; resource:{ uri, text|blob } }       ← EmbeddedResource
- *   >
- *   CallToolResult.structuredContent?: Record<string,unknown>  ← optional JSON
+ *   {
+ *     content:           TextContent[]   (required, for the LLM)
+ *     structuredContent: Record<string, unknown>  (optional, for the widget)
+ *     _meta:             Record<string, unknown>  (optional, for UI routing)
+ *     isError?:          boolean
+ *   }
  *
  * ──────────────────────────────────────────────────────────────────────────
  */
@@ -68,41 +72,247 @@ function withCors(response: Response): Response {
   });
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────
-
-type TextBlock  = { type: "text";  text: string };
-type ImageBlock = { type: "image"; data: string; mimeType: string };
-type ContentBlock = TextBlock | ImageBlock;
-
-/**
- * Fetch an image from any URL and return a base64 ImageBlock.
- * Returns null on failure (network error, non-2xx, timeout).
- * Logs every stage so you can trace issues in Vercel function logs.
- */
-async function fetchBase64Block(
-  url: string,
-  label: string
-): Promise<ImageBlock | null> {
-  console.log(`[IMG] Fetching ${label}: ${url}`);
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
-    console.log(`[IMG] ${label} — HTTP ${res.status} ${res.statusText}`);
-    if (!res.ok) return null;
-
-    const buf = await res.arrayBuffer();
-    console.log(`[IMG] ${label} — downloaded ${buf.byteLength} bytes`);
-
-    const base64 = Buffer.from(buf).toString("base64");
-    const mimeType =
-      res.headers.get("content-type")?.split(";")[0] ?? "image/png";
-
-    console.log(`[IMG] ${label} — base64 length ${base64.length}, mime ${mimeType}`);
-    return { type: "image", data: base64, mimeType };
-  } catch (err) {
-    console.error(`[IMG] ${label} — fetch error:`, err);
-    return null;
+// ── Widget HTML ────────────────────────────────────────────────────────────
+// Served at ui://jewellery-stylist/cards.html
+// Rendered by ChatGPT in a sandboxed iframe (Developer Mode only)
+// Reads data from window.openai.toolOutput.structuredContent.products
+const WIDGET_HTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jewellery Recommendations</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #0a0a0f;
+    color: #fff;
+    min-height: 100vh;
+    padding: 16px;
   }
-}
+  h2 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #a78bfa;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 14px;
+  }
+  .card {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    overflow: hidden;
+    transition: transform 0.2s, border-color 0.2s;
+    cursor: pointer;
+  }
+  .card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(167,139,250,0.5);
+  }
+  .card img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    background: #1a1a2e;
+    display: block;
+  }
+  .card-body {
+    padding: 12px;
+  }
+  .card-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #f0e6ff;
+    margin-bottom: 4px;
+    line-height: 1.3;
+  }
+  .card-price {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fbbf24;
+    margin-bottom: 6px;
+  }
+  .card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+  .tag {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: rgba(139,92,246,0.2);
+    border: 1px solid rgba(139,92,246,0.3);
+    color: #c4b5fd;
+  }
+  .card-score {
+    font-size: 10px;
+    color: #6b7280;
+    margin-bottom: 10px;
+  }
+  .btn-select {
+    width: 100%;
+    padding: 8px;
+    border-radius: 10px;
+    border: none;
+    background: linear-gradient(135deg, #7c3aed, #db2777);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .btn-select:hover { opacity: 0.85; }
+  .btn-select.selected {
+    background: linear-gradient(135deg, #059669, #0891b2);
+  }
+  .error {
+    color: #f87171;
+    font-size: 13px;
+    text-align: center;
+    padding: 32px;
+  }
+  .loading {
+    color: #6b7280;
+    font-size: 13px;
+    text-align: center;
+    padding: 32px;
+  }
+</style>
+</head>
+<body>
+<h2>✨ Jewellery Recommendations</h2>
+<div id="root"><div class="loading">Loading jewellery...</div></div>
+
+<script>
+(function() {
+  var root = document.getElementById('root');
+
+  function formatPrice(p) {
+    return '₹' + p.toLocaleString('en-IN');
+  }
+
+  function renderCards(products) {
+    if (!products || products.length === 0) {
+      root.innerHTML = '<div class="error">No products found.</div>';
+      return;
+    }
+    var html = '<div class="grid">';
+    products.forEach(function(p, i) {
+      var tags = (p.styleTags || []).slice(0, 3).map(function(t) {
+        return '<span class="tag">' + t + '</span>';
+      }).join('');
+      var occasions = (p.occasionTags || []).slice(0, 2).join(', ');
+      html += [
+        '<div class="card" id="card-' + i + '">',
+          '<img src="' + (p.image || '') + '" alt="' + p.name + '" loading="lazy"',
+               ' onerror="this.style.background=\'#1e1e2e\';this.alt=\'Image unavailable\'">',
+          '<div class="card-body">',
+            '<div class="card-name">' + p.name + '</div>',
+            '<div class="card-price">' + formatPrice(p.price) + '</div>',
+            '<div class="card-tags">' + tags + '</div>',
+            '<div class="card-score">🎉 ' + occasions + ' · ⭐ ' + (p.score || 0) + '/100</div>',
+            '<button class="btn-select" id="btn-' + i + '"',
+                    ' onclick="selectProduct(' + i + ')">',
+              'Select this piece',
+            '</button>',
+          '</div>',
+        '</div>',
+      ].join('');
+    });
+    html += '</div>';
+    root.innerHTML = html;
+  }
+
+  var selectedIndex = null;
+  var allProducts = [];
+
+  window.selectProduct = function(i) {
+    var p = allProducts[i];
+    if (!p) return;
+
+    // Update button states
+    allProducts.forEach(function(_, j) {
+      var btn = document.getElementById('btn-' + j);
+      if (btn) {
+        btn.textContent = j === i ? '✓ Selected!' : 'Select this piece';
+        btn.className = j === i ? 'btn-select selected' : 'btn-select';
+      }
+    });
+    selectedIndex = i;
+
+    // Notify host via window.openai bridge if available
+    if (window.openai && window.openai.sendMessage) {
+      window.openai.sendMessage({
+        type: 'tool_call',
+        toolName: 'jewellery_selected',
+        params: { productName: p.name, productPrice: p.price }
+      });
+    }
+    // Also post a message for any listening host
+    window.parent.postMessage({
+      type: 'mcp_widget_action',
+      action: 'select_jewellery',
+      product: p
+    }, '*');
+  };
+
+  // Read data from OpenAI Apps SDK bridge
+  function init() {
+    var data = null;
+
+    // Method 1: OpenAI Apps SDK standard
+    if (window.openai && window.openai.toolOutput) {
+      data = window.openai.toolOutput.structuredContent;
+    }
+
+    // Method 2: Check parent postMessage injection
+    // (fallback if the SDK bridge isn't initialized yet)
+    if (!data) {
+      window.addEventListener('message', function(event) {
+        if (event.data && event.data.structuredContent) {
+          allProducts = event.data.structuredContent.products || [];
+          renderCards(allProducts);
+        }
+      });
+    }
+
+    if (data && data.products) {
+      allProducts = data.products;
+      renderCards(allProducts);
+    } else if (!data) {
+      // Retry after SDK initializes
+      setTimeout(function() {
+        if (window.openai && window.openai.toolOutput) {
+          var d = window.openai.toolOutput.structuredContent;
+          if (d && d.products) {
+            allProducts = d.products;
+            renderCards(allProducts);
+            return;
+          }
+        }
+        root.innerHTML = '<div class="error">Could not load data. Make sure ChatGPT Developer Mode is enabled.</div>';
+      }, 1500);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+</body>
+</html>`;
 
 // ── MCP Server ────────────────────────────────────────────────────────────
 function buildServer(): McpServer {
@@ -112,7 +322,43 @@ function buildServer(): McpServer {
   });
 
   // ══════════════════════════════════════════════════════════════════════════
-  // TOOL 1 — recommend_jewellery
+  // RESOURCE — ui://jewellery-stylist/cards.html
+  // ChatGPT fetches this when _meta.ui.resourceUri is set in the tool result.
+  // MIME type must be text/html;profile=mcp-app for ChatGPT to render it.
+  // Requires: ChatGPT Developer Mode (Settings → Apps & Connectors → Advanced)
+  // ══════════════════════════════════════════════════════════════════════════
+  server.registerResource(
+    "jewellery-cards-widget",
+    "ui://jewellery-stylist/cards.html",
+    {
+      // ResourceMetadata = Omit<Resource, 'uri' | 'name'> — name is excluded
+      description: "Interactive jewellery recommendation cards widget with product images",
+      mimeType: "text/html;profile=mcp-app",
+    },
+    async () => {
+      console.log("[RESOURCE] Serving widget: ui://jewellery-stylist/cards.html");
+      return {
+        contents: [
+          {
+            uri: "ui://jewellery-stylist/cards.html",
+            mimeType: "text/html;profile=mcp-app",
+            text: WIDGET_HTML,
+          },
+        ],
+      };
+    }
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // TOOL — recommend_jewellery
+  //
+  // Returns:
+  //   content           → text for the LLM (always shown in standard mode)
+  //   structuredContent → jewellery data payload for the widget
+  //   _meta.ui          → tells ChatGPT (Apps SDK) which widget to render
+  //
+  // In STANDARD connector mode: only text content is shown (no images)
+  // In DEVELOPER MODE (Apps SDK): widget renders with product image cards
   // ══════════════════════════════════════════════════════════════════════════
   server.registerTool(
     "recommend_jewellery",
@@ -120,198 +366,128 @@ function buildServer(): McpServer {
       title: "Recommend Jewellery",
       description: [
         "Suggests the best jewellery from our catalogue based on occasion, outfit colour, outfit type, and style.",
-        "Returns up to 3 ranked products.",
+        "Returns up to 3 ranked products with full product cards (image, name, price, style, occasion).",
         "",
-        "CRITICAL DISPLAY RULES — follow exactly:",
-        "1. For EACH recommendation you MUST display the jewellery image to the user.",
-        "   The tool response text contains markdown image syntax like ![Name](url).",
-        "   You MUST copy this markdown verbatim into your reply so the image renders.",
-        "2. After displaying all recommendations, ask: 'Which one do you like? (1, 2, or 3)'",
-        "3. After user picks one, ask: '✨ Would you like to try this on?'",
-        "4. If yes, offer TWO options:",
-        "   Option A — 'Upload your portrait photo and I'll place the jewellery on you'",
-        "   Option B — 'Upload your outfit photo + face photo for a full look try-on'",
-        "5. After user uploads photo(s), use YOUR BUILT-IN IMAGE GENERATION to composite",
-        "   the selected jewellery (you already have it as a vision image in context)",
-        "   onto the user's photo. Preserve everything — only add the jewellery.",
+        "After showing recommendations:",
+        "1. Ask the user which piece they like (1, 2, or 3)",
+        "2. Ask if they want to try it on virtually",
+        "3. If yes: ask them to upload their portrait photo",
+        "4. Use your built-in image generation to composite the jewellery onto their photo",
       ].join("\n"),
       inputSchema: {
-        occasion: z.string().optional().describe(
-          "The occasion — e.g. 'wedding', 'engagement', 'reception', 'party'"
-        ),
-        outfitColor: z.string().optional().describe(
-          "Dominant outfit colour — e.g. 'red', 'navy', 'white', 'black'"
-        ),
-        outfitType: z.string().optional().describe(
-          "Outfit type — e.g. 'saree', 'lehenga', 'gown', 'western_dress', 'indo_western'"
-        ),
-        style: z.string().optional().describe(
-          "Jewellery style — e.g. 'bridal', 'royal', 'modern', 'elegant', 'luxury', 'antique'"
-        ),
+        occasion: z.string().optional().describe("e.g. 'wedding', 'engagement', 'reception', 'party'"),
+        outfitColor: z.string().optional().describe("e.g. 'red', 'navy', 'white', 'black'"),
+        outfitType: z.string().optional().describe("e.g. 'saree', 'lehenga', 'gown', 'western_dress'"),
+        style: z.string().optional().describe("e.g. 'bridal', 'royal', 'modern', 'elegant', 'luxury'"),
       },
     },
     async (args) => {
-      console.log("[TOOL] recommend_jewellery called with:", JSON.stringify(args));
+      console.log("[TOOL] recommend_jewellery args:", JSON.stringify(args));
 
       const results = recommendJewellery(args);
-      console.log(`[TOOL] Found ${results.length} matching products`);
+      console.log(`[TOOL] ${results.length} products matched`);
 
       if (results.length === 0) {
         return {
           content: [{
             type: "text",
-            text: "No matching jewellery found. Try broadening your criteria (e.g. remove some filters).",
+            text: "No matching jewellery found. Try with fewer filters — e.g. just mention the occasion.",
           }],
         };
       }
 
-      // Fetch all images in parallel
-      const base64Blocks = await Promise.all(
-        results.map((p, i) => fetchBase64Block(p.image, `Option ${i + 1} — ${p.name}`))
-      );
+      // ── structuredContent ───────────────────────────────────────────────
+      // This is the data payload the widget reads via window.openai.toolOutput
+      // Shape must match exactly what the widget JavaScript expects
+      const structuredContent = {
+        products: results.map((p) => ({
+          id: p.id,
+          name: p.name,
+          price: p.price,
+          image: p.image,           // Cloudinary URL — widget <img src> uses this directly
+          styleTags: p.aiTags.styleTags,
+          occasionTags: p.aiTags.occasionTags,
+          bestOutfitColours: p.aiTags.bestOutfitColours,
+          bestOutfitTypes: p.aiTags.bestOutfitTypes,
+          lookIntensity: p.aiTags.lookIntensity,
+          score: p.score,
+        })),
+        occasion: args.occasion,
+        outfitColor: args.outfitColor,
+        outfitType: args.outfitType,
+      };
 
-      // Build content blocks
-      const content: ContentBlock[] = [];
+      // ── Text content ────────────────────────────────────────────────────
+      // Always returned — this is what the LLM and plain connector users see
+      const textSummary = results
+        .map((p, i) =>
+          `${i + 1}. **${p.name}** — ₹${p.price.toLocaleString("en-IN")} (${p.score}/100 match)\n` +
+          `   Style: ${p.aiTags.styleTags.join(", ")} | Intensity: ${p.aiTags.lookIntensity}\n` +
+          `   Image: ${p.image}`
+        )
+        .join("\n\n");
 
-      // Header text
-      content.push({
-        type: "text",
-        text: "✨ Here are your top jewellery recommendations:\n",
-      });
+      console.log("[TOOL] structuredContent products:", structuredContent.products.length);
+      console.log("[TOOL] _meta.ui.resourceUri → ui://jewellery-stylist/cards.html");
 
-      // One section per product: text details + markdown image + base64 block
-      results.forEach((p, i) => {
-        const num = i + 1;
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Here are your top jewellery recommendations:\n\n${textSummary}\n\n` +
+              `Which one do you like? Reply 1, 2, or 3 and I'll offer a virtual try-on.`,
+          },
+        ],
 
-        // ── Text block with embedded markdown image ────────────────────────
-        // ChatGPT MUST reproduce the ![...](url) in its reply for the image
-        // to be visible. The description instructs it to do so.
-        const detailText = [
-          `**Option ${num}: ${p.name}**`,
-          `💰 Price: ₹${p.price.toLocaleString("en-IN")}`,
-          `🎨 Style: ${p.aiTags.styleTags.join(", ")}`,
-          `🎉 Occasions: ${p.aiTags.occasionTags.join(", ")}`,
-          `👗 Best with: ${p.aiTags.bestOutfitColours.join(", ")}`,
-          `👘 Outfit types: ${p.aiTags.bestOutfitTypes.join(", ")}`,
-          `✨ Look intensity: ${p.aiTags.lookIntensity}`,
-          `⭐ Match score: ${p.score}/100`,
-          ``,
-          // Markdown image — ChatGPT fetches & renders this in its reply
-          `![${p.name}](${p.image})`,
-        ].join("\n");
+        // ── Widget data payload ──────────────────────────────────────────
+        structuredContent,
 
-        content.push({ type: "text", text: detailText });
-
-        // ── Base64 image block ─────────────────────────────────────────────
-        // ChatGPT's vision model processes this as actual pixel data.
-        // It won't be shown to the user directly, but it lets ChatGPT
-        // "see" the jewellery for accurate try-on compositing later.
-        const b64 = base64Blocks[i];
-        if (b64) {
-          content.push(b64);
-          console.log(`[TOOL] Appended base64 block for Option ${num}`);
-        } else {
-          console.warn(`[TOOL] No base64 for Option ${num} — image fetch failed`);
-        }
-      });
-
-      // Footer instructions
-      content.push({
-        type: "text",
-        text: [
-          "",
-          "---",
-          "👆 **Images shown above are the actual jewellery pieces from our catalogue.**",
-          "",
-          "Which one do you like? Reply with **1**, **2**, or **3** and I'll offer you a virtual try-on.",
-        ].join("\n"),
-      });
-
-      // Log the full response payload shape
-      console.log(`[TOOL] Response: ${content.length} content blocks (${
-        content.filter(c => c.type === "text").length} text, ${
-        content.filter(c => c.type === "image").length} image)`);
-
-      return { content };
+        // ── Apps SDK widget routing ──────────────────────────────────────
+        // Tells ChatGPT (in Developer Mode) to fetch and render the widget
+        // at ui://jewellery-stylist/cards.html via resources/read
+        _meta: {
+          ui: {
+            resourceUri: "ui://jewellery-stylist/cards.html",
+          },
+        },
+      } as any;
     }
   );
 
   // ══════════════════════════════════════════════════════════════════════════
-  // TOOL 2 — test_jewellery_images
-  // Diagnostic tool: returns one URL image (markdown), one base64 image,
-  // and one text block. Use this to confirm which format ChatGPT renders.
+  // TOOL — test_jewellery_images (diagnostic)
   // ══════════════════════════════════════════════════════════════════════════
   server.registerTool(
     "test_jewellery_images",
     {
-      title: "Test Jewellery Image Rendering",
-      description: [
-        "Diagnostic tool that returns THREE different content formats to identify",
-        "which one ChatGPT renders as a visible image in the chat.",
-        "IMPORTANT: Display ALL content from this tool exactly as received.",
-        "For each image block, show it to the user and state which format it used.",
-      ].join("\n"),
+      title: "Test Image Rendering",
+      description: "Diagnostic tool. Tests whether ChatGPT renders the widget UI. Call this to verify Developer Mode is active.",
       inputSchema: {},
     },
     async () => {
-      console.log("[TEST] test_jewellery_images called");
+      const testProduct = {
+        id: "test",
+        name: "Royal Temple Bridal Choker Set",
+        price: 85000,
+        image: "https://res.cloudinary.com/dnjouplkz/image/upload/v1782217413/three_gcdcw2.png",
+        styleTags: ["bridal", "royal", "temple"],
+        occasionTags: ["wedding", "engagement"],
+        bestOutfitColours: ["red", "gold"],
+        bestOutfitTypes: ["lehenga", "saree"],
+        lookIntensity: "heavy",
+        score: 80,
+      };
 
-      // A real Cloudinary jewellery image from our catalogue
-      const testImageUrl =
-        "https://res.cloudinary.com/dnjouplkz/image/upload/v1782217413/three_gcdcw2.png";
-
-      const content: ContentBlock[] = [];
-
-      // ── Block 1: Plain text with markdown image tag ────────────────────
-      content.push({
-        type: "text",
-        text: [
-          "## 🧪 Image Rendering Test",
-          "",
-          "**Format A — Markdown image in text block:**",
-          `![Royal Temple Bridal Choker Set](${testImageUrl})`,
-          "",
-          "If you see an image above, Format A (markdown URL) works ✅",
-          "If you only see the URL as text, Format A does NOT work ❌",
-        ].join("\n"),
-      });
-
-      // ── Block 2: Base64 image content block ───────────────────────────
-      const b64 = await fetchBase64Block(testImageUrl, "test-image");
-      if (b64) {
-        content.push({
+      return {
+        content: [{
           type: "text",
-          text: "\n**Format B — MCP base64 image content block (follows this text):**",
-        });
-        content.push(b64);
-        content.push({
-          type: "text",
-          text: "If you see an image between the two text markers, Format B (base64 block) works ✅",
-        });
-        console.log("[TEST] base64 block added, length:", b64.data.length);
-      } else {
-        content.push({
-          type: "text",
-          text: "⚠️ Format B test failed: could not fetch image from Cloudinary.",
-        });
-      }
-
-      // ── Block 3: Summary ──────────────────────────────────────────────
-      content.push({
-        type: "text",
-        text: [
-          "",
-          "---",
-          "**Format C — Structured JSON (structuredContent):**",
-          "Not used for images — structuredContent is for machine-readable data only.",
-          "",
-          "Please tell me which format(s) rendered as a visible image so we can",
-          "use the correct approach in the main recommendation tool.",
-        ].join("\n"),
-      });
-
-      console.log(`[TEST] Returning ${content.length} blocks`);
-      return { content };
+          text: "Test widget called. If you see a jewellery card with an image below, Developer Mode is working correctly.\n\nProduct: Royal Temple Bridal Choker Set | ₹85,000",
+        }],
+        structuredContent: { products: [testProduct] },
+        _meta: {
+          ui: { resourceUri: "ui://jewellery-stylist/cards.html" },
+        },
+      } as any;
     }
   );
 
@@ -319,10 +495,9 @@ function buildServer(): McpServer {
 }
 
 // ── HTTP Handlers ─────────────────────────────────────────────────────────
-
 async function handleMcpRequest(req: Request): Promise<Response> {
   const transport = new WebStandardStreamableHTTPServerTransport({
-    sessionIdGenerator: undefined, // stateless — required for Next.js edge/serverless
+    sessionIdGenerator: undefined, // stateless
   });
   const server = buildServer();
   await server.connect(transport);
@@ -333,15 +508,12 @@ async function handleMcpRequest(req: Request): Promise<Response> {
 export async function OPTIONS(): Promise<Response> {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
-
 export async function GET(req: Request): Promise<Response> {
   return handleMcpRequest(req);
 }
-
 export async function POST(req: Request): Promise<Response> {
   return handleMcpRequest(req);
 }
-
 export async function DELETE(req: Request): Promise<Response> {
   return handleMcpRequest(req);
 }
