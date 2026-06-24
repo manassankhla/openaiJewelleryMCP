@@ -8,7 +8,7 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
   "Access-Control-Allow-Headers":
-    "Content-Type, Authorization, Mcp-Session-Id, MCP-Protocol-Version",
+    "Content-Content, Authorization, Mcp-Session-Id, MCP-Protocol-Version",
 };
 
 function withCors(response: Response): Response {
@@ -21,18 +21,46 @@ function withCors(response: Response): Response {
   });
 }
 
+// Fetch an image URL and return it as a base64 data + mimeType
+// This is the KEY: ChatGPT's vision can then actually SEE the jewellery image
+async function fetchImageAsBase64(
+  url: string
+): Promise<{ data: string; mimeType: string } | null> {
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const arrayBuffer = await res.arrayBuffer();
+    const base64 = Buffer.from(arrayBuffer).toString("base64");
+    const mimeType =
+      res.headers.get("content-type")?.split(";")[0] ?? "image/png";
+    return { data: base64, mimeType };
+  } catch {
+    return null;
+  }
+}
+
 function buildServer(): McpServer {
   const server = new McpServer({
     name: "Jewellery Stylist",
     version: "1.0.0",
   });
 
+  // ── recommend_jewellery ───────────────────────────────────────────────────
   server.registerTool(
     "recommend_jewellery",
     {
-      title: "Recommend Jewellery",
+      title: "Recommend Jewellery with Virtual Try-On",
       description:
-        "Suggests the best jewellery pieces from our catalogue based on the user's occasion, outfit colour, outfit type, and style preference. Returns up to 3 ranked products.",
+        "Suggests the best jewellery from our catalogue based on occasion, outfit colour, outfit type, and style. " +
+        "Returns up to 3 ranked products WITH their actual jewellery images embedded so you can visually see each piece. " +
+        "\n\nCONVERSATIONAL FLOW TO FOLLOW STRICTLY:\n" +
+        "STEP 1 — After showing recommendations, ask: 'Which one do you like? (1, 2, or 3)'\n" +
+        "STEP 2 — After user picks one, ask: '✨ Would you like to try this on virtually?'\n" +
+        "STEP 3 — If user says yes, give them TWO options:\n" +
+        "  • Option A: 'Upload just your portrait/face photo — I will place the jewellery around your neck'\n" +
+        "  • Option B: 'Upload your outfit/dress photo + your face photo — I will place the jewellery on your full look'\n" +
+        "STEP 4 — After user uploads photo(s), use YOUR BUILT-IN IMAGE GENERATION to composite the jewellery (which you can already see in this conversation from the tool response images) onto their uploaded photo. " +
+        "Preserve the person's face, skin, outfit, and background exactly. Only add the jewellery naturally around the neck. High quality, photorealistic.",
       inputSchema: {
         occasion: z
           .string()
@@ -74,29 +102,55 @@ function buildServer(): McpServer {
         };
       }
 
-      const formatted = results
-        .map(
-          (p, i) =>
-            `${i + 1}. **${p.name}**\n` +
-            `   - Price: ₹${p.price.toLocaleString("en-IN")}\n` +
-            `   - Style: ${p.aiTags.styleTags.join(", ")}\n` +
-            `   - Best for: ${p.aiTags.occasionTags.join(", ")}\n` +
-            `   - Outfit colours: ${p.aiTags.bestOutfitColours.join(", ")}\n` +
-            `   - Outfit types: ${p.aiTags.bestOutfitTypes.join(", ")}\n` +
-            `   - Look intensity: ${p.aiTags.lookIntensity}\n` +
-            `   - Image: ${p.image}\n` +
-            `   - Match score: ${p.score}/100`
-        )
-        .join("\n\n");
+      // Fetch all recommended jewellery images in parallel as base64
+      // so ChatGPT can VISUALLY SEE each piece (not just a URL string)
+      const imageResults = await Promise.all(
+        results.map((p) => fetchImageAsBase64(p.image))
+      );
 
-      return {
-        content: [
-          {
+      // Build the text part of the response
+      const recommendationText =
+        `Here are your top jewellery recommendations:\n\n` +
+        results
+          .map(
+            (p, i) =>
+              `**${i + 1}. ${p.name}**\n` +
+              `   💰 Price: ₹${p.price.toLocaleString("en-IN")}\n` +
+              `   🎨 Style: ${p.aiTags.styleTags.join(", ")}\n` +
+              `   🎉 Best for: ${p.aiTags.occasionTags.join(", ")}\n` +
+              `   👗 Outfit colours: ${p.aiTags.bestOutfitColours.join(", ")}\n` +
+              `   👘 Outfit types: ${p.aiTags.bestOutfitTypes.join(", ")}\n` +
+              `   ✨ Look intensity: ${p.aiTags.lookIntensity}\n` +
+              `   ⭐ Match score: ${p.score}/100`
+          )
+          .join("\n\n") +
+        `\n\n---\n👆 The jewellery images are shown above. Which one do you like? Reply with **1**, **2**, or **3**.`;
+
+      // Build the content array: text first, then one image block per product
+      // MCP image content blocks let ChatGPT's vision actually SEE the jewellery
+      type TextContent = { type: "text"; text: string };
+      type ImageContent = { type: "image"; data: string; mimeType: string };
+      const content: (TextContent | ImageContent)[] = [
+        { type: "text", text: recommendationText },
+      ];
+
+      results.forEach((p, i) => {
+        const img = imageResults[i];
+        if (img) {
+          // Add a label before each image so ChatGPT knows which option it is
+          content.push({
             type: "text",
-            text: `Here are the top jewellery recommendations:\n\n${formatted}`,
-          },
-        ],
-      };
+            text: `\n📷 Jewellery Option ${i + 1} — ${p.name}:`,
+          });
+          content.push({
+            type: "image",
+            data: img.data,
+            mimeType: img.mimeType,
+          });
+        }
+      });
+
+      return { content };
     }
   );
 
