@@ -399,8 +399,8 @@ function buildServer(): McpServer {
       const textSummary = results
         .map((p, i) =>
           `${i + 1}. **${p.name}** — ₹${p.price.toLocaleString("en-IN")} (${p.score}/100 match)\n` +
-          `   Style: ${p.aiTags.styleTags.join(", ")} | Intensity: ${p.aiTags.lookIntensity}\n` +
-          `   ![${p.name}](${p.image})`
+          `   Style: ${p.aiTags.styleTags.join(", ")} | Intensity: ${p.aiTags.lookIntensity}\n\n` +
+          `![${p.name}](${p.image})`
         )
         .join("\n\n");
 
@@ -443,7 +443,7 @@ function buildServer(): McpServer {
       return {
         content: [{
           type: "text",
-          text: "Test called. Standard image markdown: ![Test Choker](https://res.cloudinary.com/dnjouplkz/image/upload/v1782217413/three_gcdcw2.png)",
+          text: "Test called. Standard image markdown:\n\n![Test Choker](https://res.cloudinary.com/dnjouplkz/image/upload/v1782217413/three_gcdcw2.png)",
         }],
       } as any;
     }
