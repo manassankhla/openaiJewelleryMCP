@@ -314,14 +314,8 @@ const WIDGET_HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
-function getLocalImageUrl(cloudinaryUrl: string, origin: string): string {
-  if (cloudinaryUrl.includes("three_gcdcw2")) return `${origin}/three.png`;
-  if (cloudinaryUrl.includes("one_p3xu4m")) return `${origin}/one.png`;
-  if (cloudinaryUrl.includes("two_r4d4lf")) return `${origin}/two.png`;
-  if (cloudinaryUrl.includes("six_hwcfz0")) return `${origin}/six.png`;
-  if (cloudinaryUrl.includes("four_x47ahs")) return `${origin}/four.png`;
-  if (cloudinaryUrl.includes("five_pio50b")) return `${origin}/five.png`;
-  return cloudinaryUrl;
+function getLocalImageUrl(imagePath: string, origin: string): string {
+  return `${origin}${imagePath}`;
 }
 
 // ── MCP Server ────────────────────────────────────────────────────────────
@@ -458,7 +452,7 @@ function buildServer(origin: string): McpServer {
       return {
         content: [{
           type: "text",
-          text: "Test called. Standard image markdown:\n\n![Test Choker](https://res.cloudinary.com/dnjouplkz/image/upload/v1782217413/three_gcdcw2.png)",
+          text: `Test called. Standard image markdown:\n\n![Test Choker](${origin}/three.png)`,
         }],
       } as any;
     }
