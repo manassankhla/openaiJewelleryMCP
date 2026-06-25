@@ -72,17 +72,46 @@ function withCors(response: Response): Response {
   });
 }
 
+// ── Product Cache ─────────────────────────────────────────────────────────
+// Stores the latest tool result so the resource handler can embed it directly
+// in the widget HTML. Works because resources/read is called immediately after
+// the tool call (within the same warm serverless instance, <5 sec window).
+interface WidgetData {
+  products: Array<{
+    id: string; name: string; price: number; image: string; link?: string;
+    styleTags: string[]; occasionTags: string[];
+    lookIntensity: string; score: number;
+  }>;
+  occasion?: string;
+  outfitColor?: string;
+  outfitType?: string;
+}
+let _widgetCache: { data: WidgetData; ts: number } | null = null;
+
+function setCachedWidget(data: WidgetData): void {
+  _widgetCache = { data, ts: Date.now() };
+}
+function getCachedWidget(): WidgetData | null {
+  if (!_widgetCache) return null;
+  if (Date.now() - _widgetCache.ts > 60_000) return null; // 60 s TTL
+  return _widgetCache.data;
+}
+
 // ── Widget HTML ────────────────────────────────────────────────────────────
-// Served at ui://jewellery-stylist/cards.html
-// Rendered by ChatGPT in a sandboxed iframe (Developer Mode only)
-// Reads data from window.openai.toolOutput.structuredContent.products
-function getWidgetHtml(origin: string) {
+// Served at ui://widget/jewellery-cards.html
+// Pre-embeds product data as window.__INIT_DATA__ so the widget renders
+// immediately — no dependency on window.openai injection.
+function getWidgetHtml(origin: string, initData?: WidgetData | null) {
+  const initScript = initData
+    ? `window.__INIT_DATA__ = ${JSON.stringify(initData)};`
+    : `window.__INIT_DATA__ = null;`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Jewellery Recommendations</title>
+<script>${initScript}</script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -361,7 +390,7 @@ function getWidgetHtml(origin: string) {
       '<div class="table-wrapper">',
         '<table>',
           '<thead><tr>',
-            '<th></th>',
+            '<th style="width:24px">#</th>',
             '<th>Product</th>',
             '<th>Occasions</th>',
             '<th>Price</th>',
@@ -380,9 +409,7 @@ function getWidgetHtml(origin: string) {
 
       html += [
         '<tr>',
-          '<td class="td-img">',
-            '<img src="' + p.image + '" alt="' + p.name + '">',
-          '</td>',
+          '<td style="width:24px;text-align:center;font-size:11px;font-weight:700;color:#803340">' + (idx + 1) + '</td>',
           '<td class="td-name">',
             isRec ? '<div class="rec-badge">★ Best Match</div>' : '',
             '<div class="row-name">' + p.name + '</div>',
@@ -456,6 +483,15 @@ function getWidgetHtml(origin: string) {
     return false;
   }
 
+  // ── Check __INIT_DATA__ first (pre-embedded by server) ─────────────────
+  function start() {
+    if (window.__INIT_DATA__ && tryRender(window.__INIT_DATA__)) {
+      return; // data was pre-embedded ✔
+    }
+    // Fallback: poll for window.openai (requires ChatGPT Developer Mode)
+    pollOpenAI();
+  }
+
   // ── Poll for window.openai being injected ───────────────────────────────
   var pollAttempts = 0;
   var maxAttempts = 30; // 3 seconds
@@ -515,11 +551,11 @@ function getWidgetHtml(origin: string) {
     if (globals) tryRender(globals);
   });
 
-  // ── Start polling ─────────────────────────────────────────────────────────
+  // ── Start ───────────────────────────────────────────────────────────────
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', pollOpenAI);
+    document.addEventListener('DOMContentLoaded', start);
   } else {
-    pollOpenAI();
+    start();
   }
 })();
 </script>
@@ -556,13 +592,15 @@ function buildServer(origin: string): McpServer {
       mimeType: "text/html;profile=mcp-app",
     },
     async () => {
-      console.log("[RESOURCE] Serving widget: ui://widget/jewellery-cards.html");
+      const initData = getCachedWidget();
+      console.log("[RESOURCE] Serving widget. Cache hit:", !!initData,
+        initData ? `(${initData.products.length} products)` : '');
       return {
         contents: [
           {
             uri: "ui://widget/jewellery-cards.html",
             mimeType: "text/html;profile=mcp-app",
-            text: getWidgetHtml(origin),
+            text: getWidgetHtml(origin, initData),
           },
         ],
       };
@@ -654,12 +692,20 @@ function buildServer(origin: string): McpServer {
         outfitType: args.outfitType,
       };
 
+      // ── Cache the widget data for the upcoming resources/read call ───────────
+      setCachedWidget({
+        products: structuredContent.products,
+        occasion: args.occasion,
+        outfitColor: args.outfitColor,
+        outfitType: args.outfitType,
+      });
+      console.log(`[TOOL] Widget cache set: ${structuredContent.products.length} products`);
+
       return {
         content: [
           {
             type: "text",
-            text: `[FORMAT INSTRUCTION: You must include the exact markdown image tags ![name](url) provided below in your response so the images render in the chat.]\n\n` +
-              `Here are your top jewellery recommendations:\n\n${textSummary}\n\n` +
+            text: `Here are your top jewellery recommendations:\n\n${textSummary}\n\n` +
               `Which one do you like? Reply 1, 2, or 3 and I'll offer a virtual try-on.`,
           },
         ],
