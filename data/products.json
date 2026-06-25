@@ -93,5 +93,168 @@
       "bestOutfitTypes": ["gown", "western_dress", "indo_western"],
       "lookIntensity": "medium"
     }
+  },
+  {
+    "id": "7",
+    "name": "Polki Set",
+    "price": 1879196,
+    "image": "/eight.png",
+    "link": "https://puregoldjeweller.com/product/diamond-set-pg-44333482/",
+    "aiTags": {
+      "category": "necklace_set",
+      "styleTags": [
+        "traditional",
+        "navratna",
+        "polki",
+        "luxury",
+        "royal",
+        "colorful",
+        "heritage"
+      ],
+      "occasionTags": [
+        "wedding",
+        "bridal",
+        "festive",
+        "haldi",
+        "mehendi",
+        "sangeet",
+        "reception"
+      ],
+      "bestOutfitColours": [
+        "red",
+        "green",
+        "yellow",
+        "ivory",
+        "gold",
+        "cream",
+        "maroon",
+        "orange"
+      ],
+      "bestOutfitTypes": [
+        "lehenga",
+        "bridal_lehenga",
+        "silk_saree",
+        "banarasi_saree",
+        "anarkali"
+      ],
+      "lookIntensity": "medium"
+    }
+  },
+  {
+    "id": "8",
+    "name": "Polki Emerald Bridal Choker Set",
+    "price": 98000,
+    "image": "/nine.png",
+    "link": "https://puregoldjeweller.com/product/diamond-set-pg-69763253/",
+    "aiTags": {
+      "category": "choker_set",
+      "styleTags": [
+        "bridal",
+        "royal",
+        "polki",
+        "kundan",
+        "emerald",
+        "statement",
+        "heritage"
+      ],
+      "occasionTags": [
+        "wedding",
+        "bridal",
+        "reception",
+        "engagement",
+        "festive"
+      ],
+      "bestOutfitColours": [
+        "red",
+        "maroon",
+        "green",
+        "emerald",
+        "gold",
+        "ivory",
+        "cream"
+      ],
+      "bestOutfitTypes": [
+        "bridal_lehenga",
+        "lehenga",
+        "silk_saree",
+        "designer_saree"
+      ],
+      "lookIntensity": "heavy"
+    }
+  },
+  {
+    "id": "9",
+    "name": "Kundan Meenakari Bridal Set",
+    "price": 85000,
+    "image": "/ten.png",
+    "link": "https://puregoldjeweller.com/product/diamond-set-pg-81130062/",
+    "aiTags": {
+      "category": "necklace_set",
+      "styleTags": ["bridal", "kundan", "meenakari", "traditional", "royal"],
+      "occasionTags": ["wedding", "bridal", "haldi", "mehendi"],
+      "bestOutfitColours": ["pink", "yellow", "green", "red", "gold"],
+      "bestOutfitTypes": ["lehenga", "silk_saree", "anarkali"],
+      "lookIntensity": "heavy"
+    }
+  },
+  {
+    "id": "10",
+    "name": "Antique Gold Temple Haar",
+    "price": 115000,
+    "image": "/eleven.png",
+    "link": "https://puregoldjeweller.com/product/diamond-set-pg-57267210/",
+    "aiTags": {
+      "category": "long_necklace",
+      "styleTags": ["antique", "temple", "heritage", "south_indian", "royal"],
+      "occasionTags": ["wedding", "festive", "bridal"],
+      "bestOutfitColours": ["red", "maroon", "green", "gold", "yellow"],
+      "bestOutfitTypes": ["silk_saree", "kanjeevaram", "lehenga"],
+      "lookIntensity": "heavy"
+    }
+  },
+  {
+    "id": "11",
+    "name": "Diamond Ruby Cocktail Choker",
+    "price": 145000,
+    "image": "/twelve.png",
+    "link": "https://puregoldjeweller.com/product/polki-set-pg-71448196/",
+    "aiTags": {
+      "category": "choker_set",
+      "styleTags": ["diamond", "ruby", "modern", "luxury", "elegant", "statement"],
+      "occasionTags": ["reception", "party", "engagement"],
+      "bestOutfitColours": ["red", "black", "silver", "white", "navy"],
+      "bestOutfitTypes": ["gown", "western_dress", "designer_saree", "indo_western"],
+      "lookIntensity": "heavy"
+    }
+  },
+  {
+    "id": "12",
+    "name": "Pearl & Polki Rani Haar",
+    "price": 95000,
+    "image": "/thirteen.png",
+    "link": "https://puregoldjeweller.com/product/diamond-set-pg-44333482/",
+    "aiTags": {
+      "category": "long_necklace",
+      "styleTags": ["polki", "pearl", "royal", "heritage", "elegant"],
+      "occasionTags": ["wedding", "reception", "festive"],
+      "bestOutfitColours": ["ivory", "cream", "pastel_pink", "mint_green", "gold"],
+      "bestOutfitTypes": ["lehenga", "anarkali", "silk_saree"],
+      "lookIntensity": "medium"
+    }
+  },
+  {
+    "id": "13",
+    "name": "Minimalist Rose Gold Diamond Set",
+    "price": 55000,
+    "image": "/seven.png",
+    "link": "https://puregoldjeweller.com/product/diamond-set-pg-47229867/",
+    "aiTags": {
+      "category": "necklace_set",
+      "styleTags": ["minimalist", "modern", "diamond", "rose_gold", "elegant"],
+      "occasionTags": ["party", "engagement", "festive", "casual_party"],
+      "bestOutfitColours": ["pastel_pink", "white", "black", "navy", "beige"],
+      "bestOutfitTypes": ["gown", "indo_western", "western_dress", "saree"],
+      "lookIntensity": "light"
+    }
   }
 ]

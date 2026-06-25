@@ -648,17 +648,17 @@ function buildServer(origin: string): McpServer {
         ui: {
           resourceUri: "ui://widget/jewellery-cards.html",
         },
-        "openai/outputTemplate": "ui://widget/jewellery-cards.html",
+        "openai/outputTemplate": `${origin}/widget/cards`,
       },
     },
     async (args) => {
       console.log("[TOOL] recommend_jewellery args:", JSON.stringify(args));
 
       const rawResults = recommendJewellery(args);
-      const results = await Promise.all(rawResults.map(async (p) => ({
+      const results = rawResults.map((p) => ({
         ...p,
-        image: await getBase64ImageUrl(p.image, origin),
-      })));
+        image: getLocalImageUrl(p.image, origin),
+      }));
 
       console.log(`[TOOL] ${results.length} products matched`);
 
@@ -720,7 +720,7 @@ function buildServer(origin: string): McpServer {
           ui: {
             resourceUri: "ui://widget/jewellery-cards.html",
           },
-          "openai/outputTemplate": "ui://widget/jewellery-cards.html",
+          "openai/outputTemplate": `${origin}/widget/cards`,
         },
       } as any;
     }
@@ -845,6 +845,9 @@ async function handleMcpRequest(req: Request): Promise<Response> {
   const response = await transport.handleRequest(req);
   return withCors(response);
 }
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function OPTIONS(): Promise<Response> {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
