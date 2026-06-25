@@ -429,31 +429,97 @@ function getWidgetHtml(origin: string) {
     root.innerHTML = html;
   }
 
-  function init() {
-    if (window.openai && window.openai.toolOutput) {
-      render(window.openai.toolOutput.structuredContent);
-    }
-    window.addEventListener('message', function(event) {
-      var message = event.data;
-      if (!message) return;
-      if (message.jsonrpc === "2.0" && message.method === "ui/notifications/tool-result") {
-        render(message.params.structuredContent);
-      } else if (message.structuredContent) {
-        render(message.structuredContent);
-      }
-    });
-    window.addEventListener('openai:set_globals', function(event) {
-      var globals = event.detail && event.detail.globals;
-      if (globals && globals.toolOutput) {
-        render(globals.toolOutput.structuredContent);
-      }
-    });
+  // ── Extract product data from wherever ChatGPT puts it ─────────────────
+  function extractData(obj) {
+    if (!obj) return null;
+    // Direct hit
+    if (obj.products && Array.isArray(obj.products)) return obj;
+    // Nested under structuredContent
+    if (obj.structuredContent) return extractData(obj.structuredContent);
+    // Nested under toolOutput
+    if (obj.toolOutput) return extractData(obj.toolOutput);
+    // Nested under result
+    if (obj.result) return extractData(obj.result);
+    // Nested under output
+    if (obj.output) return extractData(obj.output);
+    // Nested under data
+    if (obj.data) return extractData(obj.data);
+    return null;
   }
 
+  function tryRender(obj) {
+    var data = extractData(obj);
+    if (data && data.products && data.products.length > 0) {
+      render(data);
+      return true;
+    }
+    return false;
+  }
+
+  // ── Poll for window.openai being injected ───────────────────────────────
+  var pollAttempts = 0;
+  var maxAttempts = 30; // 3 seconds
+  function pollOpenAI() {
+    if (pollAttempts >= maxAttempts) return;
+    pollAttempts++;
+    if (window.openai) {
+      var to = window.openai.toolOutput;
+      if (to) {
+        if (!tryRender(to)) {
+          // Try the toolOutput directly
+          tryRender({ products: to.products || [], outfitColor: to.outfitColor, outfitType: to.outfitType });
+        }
+        return;
+      }
+    }
+    setTimeout(pollOpenAI, 100);
+  }
+
+  // ── Listen for ALL message types ─────────────────────────────────────────
+  window.addEventListener('message', function(event) {
+    var msg = event.data;
+    if (!msg || typeof msg !== 'object') return;
+
+    // Format 1: JSONRPC notification
+    if (msg.jsonrpc === '2.0' && msg.method === 'ui/notifications/tool-result') {
+      tryRender(msg.params);
+      return;
+    }
+    // Format 2: Direct structuredContent
+    if (msg.structuredContent) {
+      tryRender(msg.structuredContent);
+      return;
+    }
+    // Format 3: toolOutput wrapper
+    if (msg.toolOutput) {
+      tryRender(msg.toolOutput);
+      return;
+    }
+    // Format 4: products directly
+    if (msg.products && Array.isArray(msg.products)) {
+      tryRender(msg);
+      return;
+    }
+    // Format 5: result wrapper
+    if (msg.result) {
+      tryRender(msg.result);
+      return;
+    }
+    // Format 6: Any object — deep search
+    tryRender(msg);
+  });
+
+  // ── Listen for OpenAI globals event ──────────────────────────────────────
+  window.addEventListener('openai:set_globals', function(event) {
+    var globals = event.detail && event.detail.globals;
+    if (globals) tryRender(globals);
+  });
+
+  // ── Start polling ─────────────────────────────────────────────────────────
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', pollOpenAI);
   } else {
-    init();
+    pollOpenAI();
   }
 })();
 </script>
