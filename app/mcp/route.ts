@@ -403,7 +403,7 @@ function getWidgetHtml(origin: string, initData?: WidgetData | null) {
           '<div class="carousel-img-container">',
             isRec ? '<div class="rec-badge">★ Best Match</div>' : '',
             '<div class="score-badge">' + (p.score || '-') + ' Match</div>',
-            p.image ? '<img class="carousel-img" src="' + p.image + '" alt="' + p.name + '" loading="lazy" crossorigin="anonymous">' : '',
+            p.image ? '<img class="carousel-img" src="' + p.image + '" alt="' + p.name + '" loading="lazy">' : '',
           '</div>',
           '<div class="carousel-content">',
             '<div class="carousel-title">' + p.name + '</div>',
@@ -569,14 +569,14 @@ function buildServer(origin: string): McpServer {
   });
 
   // ══════════════════════════════════════════════════════════════════════════
-  // RESOURCE — ui://widget/jewellery-cards-v2.html
+  // RESOURCE — ui://widget/jewellery-cards-v3.html
   // ChatGPT fetches this when _meta.ui.resourceUri is set in the tool result.
   // MIME type must be text/html;profile=mcp-app for ChatGPT to render it.
   // Requires: ChatGPT Developer Mode (Settings → Apps & Connectors → Advanced)
   // ══════════════════════════════════════════════════════════════════════════
   server.registerResource(
     "jewellery-cards-widget",
-    "ui://widget/jewellery-cards-v2.html",
+    "ui://widget/jewellery-cards-v3.html",
     {
       // ResourceMetadata = Omit<Resource, 'uri' | 'name'> — name is excluded
       description: "Interactive jewellery recommendation cards widget with product images",
@@ -589,7 +589,7 @@ function buildServer(origin: string): McpServer {
       return {
         contents: [
           {
-            uri: "ui://widget/jewellery-cards-v2.html",
+            uri: "ui://widget/jewellery-cards-v3.html",
             mimeType: "text/html;profile=mcp-app",
             text: getWidgetHtml(origin, initData),
           },
@@ -631,9 +631,9 @@ function buildServer(origin: string): McpServer {
       },
       _meta: {
         ui: {
-          resourceUri: "ui://widget/jewellery-cards-v2.html",
+          resourceUri: "ui://widget/jewellery-cards-v3.html",
         },
-        "openai/outputTemplate": "ui://widget/jewellery-cards-v2.html",
+        "openai/outputTemplate": "ui://widget/jewellery-cards-v3.html",
       },
     },
     async (args) => {
@@ -703,9 +703,9 @@ function buildServer(origin: string): McpServer {
         structuredContent,
         _meta: {
           ui: {
-            resourceUri: "ui://widget/jewellery-cards-v2.html",
+            resourceUri: "ui://widget/jewellery-cards-v3.html",
           },
-          "openai/outputTemplate": "ui://widget/jewellery-cards-v2.html",
+          "openai/outputTemplate": "ui://widget/jewellery-cards-v3.html",
         },
       } as any;
     }
