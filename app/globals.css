@@ -26,3 +26,20 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ── Jewellery widget utilities ─────────────────────────────────────────── */
+
+/**
+ * scrollbar-hide — used by the carousel track to hide the native scrollbar
+ * while keeping the area scrollable (mouse/touch/keyboard).
+ * Tailwind 4 defines custom utilities via @utility.
+ */
+@utility scrollbar-hide {
+  scrollbar-width: none;          /* Firefox */
+  -ms-overflow-style: none;       /* IE/Edge */
+
+  &::-webkit-scrollbar {
+    display: none;                /* Chrome/Safari/Opera */
+  }
+}
+
