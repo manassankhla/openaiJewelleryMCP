@@ -391,6 +391,7 @@ function getWidgetHtml(origin: string, initData?: WidgetData | null) {
         '<table>',
           '<thead><tr>',
             '<th style="width:24px">#</th>',
+            '<th style="width:88px"></th>',
             '<th>Product</th>',
             '<th>Occasions</th>',
             '<th>Price</th>',
@@ -410,6 +411,9 @@ function getWidgetHtml(origin: string, initData?: WidgetData | null) {
       html += [
         '<tr>',
           '<td style="width:24px;text-align:center;font-size:11px;font-weight:700;color:#803340">' + (idx + 1) + '</td>',
+          '<td class="td-img">',
+            p.image ? '<img src="' + p.image + '" alt="' + p.name + '" loading="lazy" crossorigin="anonymous">' : '',
+          '</td>',
           '<td class="td-name">',
             isRec ? '<div class="rec-badge">★ Best Match</div>' : '',
             '<div class="row-name">' + p.name + '</div>',
