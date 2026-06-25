@@ -76,7 +76,8 @@ function withCors(response: Response): Response {
 // Served at ui://jewellery-stylist/cards.html
 // Rendered by ChatGPT in a sandboxed iframe (Developer Mode only)
 // Reads data from window.openai.toolOutput.structuredContent.products
-const WIDGET_HTML = `<!DOCTYPE html>
+function getWidgetHtml(origin: string) {
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -92,7 +93,7 @@ const WIDGET_HTML = `<!DOCTYPE html>
 <script>
 (function() {
   const iframe = document.getElementById('widget-frame');
-  const origin = window.location.origin;
+  const origin = "${origin}";
   iframe.src = origin + '/widget/cards';
 
   // Listen to messages from standard MCP Apps / ChatGPT window.parent
@@ -138,6 +139,7 @@ const WIDGET_HTML = `<!DOCTYPE html>
 </script>
 </body>
 </html>`;
+}
 
 function getLocalImageUrl(imagePath: string, origin: string): string {
   if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
@@ -174,7 +176,7 @@ function buildServer(origin: string): McpServer {
           {
             uri: "ui://widget/jewellery-cards.html",
             mimeType: "text/html;profile=mcp-app",
-            text: WIDGET_HTML,
+            text: getWidgetHtml(origin),
           },
         ],
       };
