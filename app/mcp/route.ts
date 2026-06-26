@@ -565,7 +565,7 @@ function getLocalImageUrl(imagePath: string, origin: string): string {
 function buildServer(origin: string): McpServer {
   const server = new McpServer({
     name: "Jewellery Stylist",
-    version: "1.0.0",
+    version: "1.0.1",
   });
 
   // ══════════════════════════════════════════════════════════════════════════
