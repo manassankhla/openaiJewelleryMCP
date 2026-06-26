@@ -608,7 +608,7 @@ function buildServer(origin: string): McpServer {
   //
   // In STANDARD connector mode: only text content is shown (no images)
   // In DEVELOPER MODE (Apps SDK): widget renders with product image cards
-  // ══════════════════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════
   server.registerTool(
     "recommend_jewellery",
     {
