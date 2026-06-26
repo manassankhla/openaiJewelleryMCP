@@ -815,18 +815,38 @@ function buildServer(origin: string): McpServer {
   return server;
 }
 
+// ── Global Singletons for Stateless HTTP ──────────────────────────────────
+let globalServer: McpServer | null = null;
+let globalTransport: WebStandardStreamableHTTPServerTransport | null = null;
+
+async function getMcp(origin: string) {
+  if (!globalServer || !globalTransport) {
+    // 1. Create the transport ONCE
+    globalTransport = new WebStandardStreamableHTTPServerTransport({
+      sessionIdGenerator: undefined, // stateless
+      enableJsonResponse: true,
+    });
+    
+    // 2. Create the server ONCE
+    globalServer = buildServer(origin);
+    
+    // 3. Connect them ONCE
+    await globalServer.connect(globalTransport);
+  }
+  
+  return { server: globalServer, transport: globalTransport };
+}
+
 // ── HTTP Handlers ─────────────────────────────────────────────────────────
 async function handleMcpRequest(req: Request): Promise<Response> {
   const proto = req.headers.get("x-forwarded-proto") || "https";
   const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
   const origin = host ? `${proto}://${host}` : new URL(req.url).origin;
   
-  const transport = new WebStandardStreamableHTTPServerTransport({
-    sessionIdGenerator: undefined, // stateless
-    enableJsonResponse: true,
-  });
-  const server = buildServer(origin);
-  await server.connect(transport);
+  // Retrieve the initialized singleton instances
+  const { transport } = await getMcp(origin);
+  
+  // Process the request using the ALREADY CONNECTED transport
   const response = await transport.handleRequest(req);
   return withCors(response);
 }
